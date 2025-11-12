@@ -1,0 +1,13 @@
+# Target labels
+ bootloader
+# Source files and their labels
+/home/yrs/Documents/esp32/v5.5/AlarmLora/Receiver/build/CMakeFiles/bootloader
+/home/yrs/Documents/esp32/v5.5/AlarmLora/Receiver/build/CMakeFiles/bootloader.rule
+/home/yrs/Documents/esp32/v5.5/AlarmLora/Receiver/build/CMakeFiles/bootloader-complete.rule
+/home/yrs/Documents/esp32/v5.5/AlarmLora/Receiver/build/bootloader-prefix/src/bootloader-stamp/bootloader-build.rule
+/home/yrs/Documents/esp32/v5.5/AlarmLora/Receiver/build/bootloader-prefix/src/bootloader-stamp/bootloader-configure.rule
+/home/yrs/Documents/esp32/v5.5/AlarmLora/Receiver/build/bootloader-prefix/src/bootloader-stamp/bootloader-download.rule
+/home/yrs/Documents/esp32/v5.5/AlarmLora/Receiver/build/bootloader-prefix/src/bootloader-stamp/bootloader-install.rule
+/home/yrs/Documents/esp32/v5.5/AlarmLora/Receiver/build/bootloader-prefix/src/bootloader-stamp/bootloader-mkdir.rule
+/home/yrs/Documents/esp32/v5.5/AlarmLora/Receiver/build/bootloader-prefix/src/bootloader-stamp/bootloader-patch.rule
+/home/yrs/Documents/esp32/v5.5/AlarmLora/Receiver/build/bootloader-prefix/src/bootloader-stamp/bootloader-update.rule
