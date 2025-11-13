@@ -20,14 +20,14 @@
 #define INITIATING_NODE
 
 // SX1262 has the following connections:
-#define LORA_CS     8
-#define LORA_DIO1   14
-#define LORA_RST    12
-#define LORA_BUSY   13
+#define LORA_CS 8
+#define LORA_DIO1 14
+#define LORA_RST 12
+#define LORA_BUSY 13
 // SPI Pins
-#define LORA_SCK    9
-#define LORA_MISO   11
-#define LORA_MOSI   10
+#define LORA_SCK 9
+#define LORA_MISO 11
+#define LORA_MOSI 10
 
 SPIClass loraSPI(1);
 
@@ -50,12 +50,14 @@ bool transmitFlag = false;
 // flag to indicate that a packet was sent or received
 volatile bool operationDone = false;
 
+uint8_t targetNode = 2;
+
 // this function is called when a complete packet
 // is transmitted or received by the module
 // IMPORTANT: this function MUST be 'void' type
 //            and MUST NOT have any arguments!
 #if defined(ESP8266) || defined(ESP32)
-  ICACHE_RAM_ATTR
+ICACHE_RAM_ATTR
 #endif
 void setFlag(void) {
   // we sent or received a packet, set the flag
@@ -85,32 +87,38 @@ void setup() {
   // when new packet is received
   radio.setDio1Action(setFlag);
 
-  #if defined(INITIATING_NODE)
-    // send the first packet on this node
-    Serial.print(F("[SX1262] Sending first packet ... "));
-    transmissionState = radio.startTransmit("Hello World!");
-    transmitFlag = true;
-  #else
-    // start listening for LoRa packets on this node
-    Serial.print(F("[SX1262] Starting to listen ... "));
-    state = radio.startReceive();
-    if (state == RADIOLIB_ERR_NONE) {
-      Serial.println(F("success!"));
-    } else {
-      Serial.print(F("failed, code "));
-      Serial.println(state);
-      while (true) { delay(10); }
-    }
-  #endif
+#if defined(INITIATING_NODE)
+  String packet = "";
+  packet += targetNode;       // Add the address (e.g., "2")
+  packet += ":Hello World!";  // Add a separator and the message
+  // send the first packet on this node
+  Serial.print(F("[SX1262] Sending packet to node "));
+  Serial.print(targetNode);
+  Serial.println(F(" ... "));
+
+  transmissionState = radio.startTransmit(packet);
+  transmitFlag = true;
+#else
+  // start listening for LoRa packets on this node
+  Serial.print(F("[SX1262] Starting to listen ... "));
+  state = radio.startReceive();
+  if (state == RADIOLIB_ERR_NONE) {
+    Serial.println(F("success!"));
+  } else {
+    Serial.print(F("failed, code "));
+    Serial.println(state);
+    while (true) { delay(10); }
+  }
+#endif
 }
 
 void loop() {
   // check if the previous operation finished
-  if(operationDone) {
+  if (operationDone) {
     // reset flag
     operationDone = false;
 
-    if(transmitFlag) {
+    if (transmitFlag) {
       // the previous operation was transmission, listen for response
       // print the result
       if (transmissionState == RADIOLIB_ERR_NONE) {
@@ -120,7 +128,6 @@ void loop() {
       } else {
         Serial.print(F("failed, code "));
         Serial.println(transmissionState);
-
       }
 
       // listen for response
@@ -150,17 +157,30 @@ void loop() {
         Serial.print(F("[SX1262] SNR:\t\t"));
         Serial.print(radio.getSNR());
         Serial.println(F(" dB"));
-
       }
 
       // wait a second before transmitting again
       delay(1000);
 
-      // send another one
-      Serial.print(F("[SX1262] Sending another packet ... "));
-      transmissionState = radio.startTransmit("Hello World!");
+      // --- MODIFIED SECTION ---
+      // Create the new packet
+      String packet = "";
+      packet += targetNode;       // Add the address (e.g., "2")
+      packet += ":Hello World!";  // Add a separator and the message
+
+      Serial.print(F("[SX1262] Sending packet to node "));
+      Serial.print(targetNode);
+      Serial.println(F(" ... "));
+
+      transmissionState = radio.startTransmit(packet);
       transmitFlag = true;
+
+      // Alternate between node 2 and 3
+      if (targetNode == 2) {
+        targetNode = 3;
+      } else {
+        targetNode = 2;
+      }
     }
-  
   }
 }

@@ -32,6 +32,7 @@
 #include <RadioBoards.h>
 Radio radio = new RadioModule();
 
+#define NODE_ID 3
 
 // save transmission states between loops
 int transmissionState = RADIOLIB_ERR_NONE;
@@ -93,11 +94,11 @@ void setup() {
 
 void loop() {
   // check if the previous operation finished
-  if(operationDone) {
+  if (operationDone) {
     // reset flag
     operationDone = false;
 
-    if(transmitFlag) {
+    if (transmitFlag) {
       // the previous operation was transmission, listen for response
       // print the result
       if (transmissionState == RADIOLIB_ERR_NONE) {
@@ -107,7 +108,6 @@ void loop() {
       } else {
         Serial.print(F("failed, code "));
         Serial.println(transmissionState);
-
       }
 
       // listen for response
@@ -128,26 +128,49 @@ void loop() {
         Serial.print(F("[SX1262] Data:\t\t"));
         Serial.println(str);
 
-        // print RSSI (Received Signal Strength Indicator)
-        Serial.print(F("[SX1262] RSSI:\t\t"));
-        Serial.print(radio.getRSSI());
-        Serial.println(F(" dBm"));
+        // --- MODIFIED SECTION ---
+        // Check the address
+        // Find the "address" part (before the ":")
+        int separator = str.indexOf(':');
+        int destinationID = str.substring(0, separator).toInt();
 
-        // print SNR (Signal-to-Noise Ratio)
-        Serial.print(F("[SX1262] SNR:\t\t"));
-        Serial.print(radio.getSNR());
-        Serial.println(F(" dB"));
+        // Check if the packet is for this node
+        if (destinationID == NODE_ID) {
+          Serial.println(F("[SX1262] Packet is for me!"));
+          Serial.print(F("[SX1262] RSSI:\t\t"));
+          Serial.print(radio.getRSSI());
+          Serial.println(F(" dBm"));
 
+          // print RSSI (Received Signal Strength Indicator)
+          Serial.print(F("[SX1262] RSSI:\t\t"));
+          Serial.print(radio.getRSSI());
+          Serial.println(F(" dBm"));
+
+          // print SNR (Signal-to-Noise Ratio)
+          Serial.print(F("[SX1262] SNR:\t\t"));
+          Serial.print(radio.getSNR());
+          Serial.println(F(" dB"));
+
+          // wait a second before transmitting again
+          delay(1000);
+
+          // Send a reply
+          // (Replies could also be addressed back to node 1)
+          String reply = "1:Got it!";
+          Serial.print(F("[SX1262] Sending reply ... "));
+          transmissionState = radio.startTransmit(reply);
+          transmitFlag = true;
+        } else {
+          // Packet was not for this node, stay silent
+          Serial.print(F("[SX1262] Packet was for node "));
+          Serial.print(destinationID);
+          Serial.println(F(", ignoring."));
+
+          // Go back to listening without replying
+          radio.startReceive();
+          transmitFlag = false;
+        }
       }
-
-      // wait a second before transmitting again
-      delay(1000);
-
-      // send another one
-      Serial.print(F("[SX1262] Sending another packet ... "));
-      transmissionState = radio.startTransmit("Hello World!");
-      transmitFlag = true;
     }
-  
   }
 }
