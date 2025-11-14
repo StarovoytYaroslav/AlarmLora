@@ -51,6 +51,8 @@ bool transmitFlag = false;
 volatile bool operationDone = false;
 
 uint8_t targetNode = 2;
+#define NUM_NODES 3
+#define RX_TIMEOUT 2000 // 2-second timeout
 
 // this function is called when a complete packet
 // is transmitted or received by the module
@@ -62,6 +64,25 @@ ICACHE_RAM_ATTR
 void setFlag(void) {
   // we sent or received a packet, set the flag
   operationDone = true;
+}
+
+void pingNextNode(){
+  targetNode++;
+  if(targetNode > NUM_NODES)
+  {
+    targetNode = 2;
+  }
+  String packet = "";
+  packet += targetNode;
+  packet += ":Hello World!";
+
+  Serial.print(F("[SX1262] Sending packet to node "));
+  Serial.print(targetNode);
+  Serial.println(F("..."));
+  Serial.println(packet);
+
+  transmissionState = radio.startTransmit(packet);
+  transmitFlag = true;
 }
 
 void setup() {
@@ -88,16 +109,17 @@ void setup() {
   radio.setDio1Action(setFlag);
 
 #if defined(INITIATING_NODE)
-  String packet = "";
-  packet += targetNode;       // Add the address (e.g., "2")
-  packet += ":Hello World!";  // Add a separator and the message
-  // send the first packet on this node
-  Serial.print(F("[SX1262] Sending packet to node "));
-  Serial.print(targetNode);
-  Serial.println(F(" ... "));
+  pingNextNode();
+  // String packet = "";
+  // packet += targetNode;       // Add the address (e.g., "2")
+  // packet += ":Hello World!";  // Add a separator and the message
+  // // send the first packet on this node
+  // Serial.print(F("[SX1262] Sending packet to node "));
+  // Serial.print(targetNode);
+  // Serial.println(F(" ... "));
 
-  transmissionState = radio.startTransmit(packet);
-  transmitFlag = true;
+  // transmissionState = radio.startTransmit(packet);
+  // transmitFlag = true;
 #else
   // start listening for LoRa packets on this node
   Serial.print(F("[SX1262] Starting to listen ... "));
@@ -120,20 +142,25 @@ void loop() {
 
     if (transmitFlag) {
       // the previous operation was transmission, listen for response
+      transmitFlag = false;
       // print the result
       if (transmissionState == RADIOLIB_ERR_NONE) {
         // packet was successfully sent
         Serial.println(F("transmission finished!"));
 
+        // Start listening for a reply, WITH a timeout
+        Serial.print(F("[SX1262] Listening for reply (max "));
+        Serial.print(RX_TIMEOUT);
+        Serial.println(F(" ms)..."));
+        radio.startReceive(RX_TIMEOUT);
+
       } else {
-        Serial.print(F("failed, code "));
+        Serial.print(F("transmission failed, code "));
         Serial.println(transmissionState);
+        // Don't listen, just wait and move to the next node
+        delay(1000); 
+        pingNextNode();
       }
-
-      // listen for response
-      radio.startReceive();
-      transmitFlag = false;
-
     } else {
       // the previous operation was reception
       // print data and send another packet
@@ -157,30 +184,19 @@ void loop() {
         Serial.print(F("[SX1262] SNR:\t\t"));
         Serial.print(radio.getSNR());
         Serial.println(F(" dB"));
+      } else if(state == RADIOLIB_ERR_RX_TIMEOUT) {
+        // --- TIMEOUT: No reply ---
+        Serial.print(F("[SX1262] Timed out waiting for reply from node "));
+        Serial.println(targetNode);
+      } else {
+        // --- Other error ---
+        Serial.print(F("[SX1262] Receive failed, code "));
+        Serial.println(state);
       }
 
       // wait a second before transmitting again
       delay(1000);
-
-      // --- MODIFIED SECTION ---
-      // Create the new packet
-      String packet = "";
-      packet += targetNode;       // Add the address (e.g., "2")
-      packet += ":Hello World!";  // Add a separator and the message
-
-      Serial.print(F("[SX1262] Sending packet to node "));
-      Serial.print(targetNode);
-      Serial.println(F(" ... "));
-
-      transmissionState = radio.startTransmit(packet);
-      transmitFlag = true;
-
-      // Alternate between node 2 and 3
-      if (targetNode == 2) {
-        targetNode = 3;
-      } else {
-        targetNode = 2;
-      }
+      pingNextNode();
     }
   }
 }
