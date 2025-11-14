@@ -137,9 +137,6 @@ void loop() {
         // Check if the packet is for this node
         if (destinationID == NODE_ID) {
           Serial.println(F("[SX1262] Packet is for me!"));
-          Serial.print(F("[SX1262] RSSI:\t\t"));
-          Serial.print(radio.getRSSI());
-          Serial.println(F(" dBm"));
 
           // print RSSI (Received Signal Strength Indicator)
           Serial.print(F("[SX1262] RSSI:\t\t"));
@@ -152,7 +149,7 @@ void loop() {
           Serial.println(F(" dB"));
 
           // wait a second before transmitting again
-          delay(1000);
+          delay(100);
 
           // Send a reply
           // (Replies could also be addressed back to node 1)

@@ -148,6 +148,8 @@ void loop() {
         // packet was successfully sent
         Serial.println(F("transmission finished!"));
 
+        radio.getStatus();
+
         // Start listening for a reply, WITH a timeout
         Serial.print(F("[SX1262] Listening for reply (max "));
         Serial.print(RX_TIMEOUT);
@@ -166,6 +168,8 @@ void loop() {
       // print data and send another packet
       String str;
       int state = radio.readData(str);
+
+      radio.standby(); // Force the radio into a clean idle state
 
       if (state == RADIOLIB_ERR_NONE) {
         // packet was successfully received
