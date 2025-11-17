@@ -144,17 +144,18 @@ void loop() {
       // the previous operation was transmission, listen for response
       transmitFlag = false;
       // print the result
+
+      transmissionState = radio.finishTransmit();
+
       if (transmissionState == RADIOLIB_ERR_NONE) {
         // packet was successfully sent
         Serial.println(F("transmission finished!"));
-
-        radio.getStatus();
-
+        radio.standby();
         // Start listening for a reply, WITH a timeout
         Serial.print(F("[SX1262] Listening for reply (max "));
         Serial.print(RX_TIMEOUT);
         Serial.println(F(" ms)..."));
-        radio.startReceive(RX_TIMEOUT);
+        radio.startReceive(2000);
 
       } else {
         Serial.print(F("transmission failed, code "));
