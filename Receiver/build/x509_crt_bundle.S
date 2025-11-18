@@ -1,4 +1,4 @@
-/* * Data converted from /home/yrs/Documents/esp32/v5.5/AlarmLora/Receiver/build/esp-idf/mbedtls/x509_crt_bundle
+/* * Data converted from /home/yrs/Documents/esp32/5.5/AlarmLora/Receiver/build/esp-idf/mbedtls/x509_crt_bundle
  */
 .data
 #if !defined (__APPLE__) && !defined (__linux__)

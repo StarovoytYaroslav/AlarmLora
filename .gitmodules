@@ -1,0 +1,3 @@
+[submodule "components/RadioLib"]
+	path = Receiver/components/RadioLib
+	url = git@github.com:StarovoytYaroslav/RadioLib.git

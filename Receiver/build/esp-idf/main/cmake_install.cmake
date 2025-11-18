@@ -1,4 +1,4 @@
-# Install script for directory: /home/yrs/Documents/esp32/v5.5/AlarmLora/Receiver/main
+# Install script for directory: /home/yrs/Documents/esp32/5.5/AlarmLora/Receiver/main
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)

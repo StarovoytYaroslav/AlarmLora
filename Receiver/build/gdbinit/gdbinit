@@ -1,2 +1,2 @@
-source /home/yrs/Documents/esp32/v5.5/AlarmLora/Receiver/build/gdbinit/symbols
-source /home/yrs/Documents/esp32/v5.5/AlarmLora/Receiver/build/gdbinit/connect
+source /home/yrs/Documents/esp32/5.5/AlarmLora/Receiver/build/gdbinit/symbols
+source /home/yrs/Documents/esp32/5.5/AlarmLora/Receiver/build/gdbinit/connect

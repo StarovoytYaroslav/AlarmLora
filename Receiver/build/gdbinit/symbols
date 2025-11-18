@@ -13,8 +13,8 @@ end
 
 # Load bootloader symbols
 set confirm off
-    add-symbol-file /home/yrs/Documents/esp32/v5.5/AlarmLora/Receiver/build/bootloader/bootloader.elf
+    add-symbol-file /home/yrs/Documents/esp32/5.5/AlarmLora/Receiver/build/bootloader/bootloader.elf
 set confirm on
 
 # Load application symbols
-file /home/yrs/Documents/esp32/v5.5/AlarmLora/Receiver/build/Receiver.elf
+file /home/yrs/Documents/esp32/5.5/AlarmLora/Receiver/build/Receiver.elf
