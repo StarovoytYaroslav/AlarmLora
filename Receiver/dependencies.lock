@@ -449,7 +449,7 @@ dependencies:
   idf:
     source:
       type: idf
-    version: 5.5.1
+    version: 5.4.2
   joltwallet/littlefs:
     component_hash: 1808d73e99168f6f3c26dd31799a248484762b3a320ec4962dec11a145f4277f
     dependencies:
@@ -463,6 +463,6 @@ dependencies:
 direct_dependencies:
 - espressif/arduino-esp32
 - idf
-manifest_hash: 1be65871889e057072a8156ad2b85623fcb749b0df343c187a9266489a25e45f
+manifest_hash: 46708c393a56478010fa798c41af0b1c760e6ec341749aa2c2422fbaf1bcc57b
 target: esp32s3
 version: 2.0.0

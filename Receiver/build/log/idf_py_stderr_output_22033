@@ -1,3 +1,0 @@
-Command: cmake -G Ninja -DPYTHON_DEPS_CHECKED=1 -DPYTHON=/home/yrs/.espressif/python_env/idf5.5_py3.10_env/bin/python -DESP_PLATFORM=1 -DCCACHE_ENABLE=0 /home/yrs/Documents/esp32/5.5/AlarmLora/Receiver
-ESP Insights Project commit: 63d768e-dirty
-ESP RainMaker Project commit: 63d768e-dirty
