@@ -166,7 +166,7 @@ void loop() {
           Serial.println(F(" dB"));
 
           // wait a second before transmitting again
-          delay(1000);
+          delay(100);
 
           // Send a reply
           // (Replies could also be addressed back to node 1)

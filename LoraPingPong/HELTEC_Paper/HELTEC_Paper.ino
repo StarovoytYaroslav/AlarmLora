@@ -40,19 +40,22 @@ SX1262 radio = new Module(LORA_CS, LORA_DIO1, LORA_RST, LORA_BUSY, loraSPI);
 // #include <RadioBoards.h>
 // Radio radio = new RadioModule();
 
-
-// save transmission states between loops
-int transmissionState = RADIOLIB_ERR_NONE;
-
-// flag to indicate transmission or reception state
-bool transmitFlag = false;
-
-// flag to indicate that a packet was sent or received
-volatile bool operationDone = false;
-
 uint8_t targetNode = 2;
 #define NUM_NODES 3
-#define RX_TIMEOUT 2000 // 2-second timeout
+#define RX_TIMEOUT 2000  // 2-second timeout
+
+// We will use these to manage our own timeout
+bool waitingForReply = false;
+uint32_t replyStartTime = 0;
+
+// // save transmission states between loops
+// int transmissionState = RADIOLIB_ERR_NONE;
+
+// // flag to indicate transmission or reception state
+// bool transmitFlag = false;
+
+// // flag to indicate that a packet was sent or received
+volatile bool operationDone = false;
 
 // this function is called when a complete packet
 // is transmitted or received by the module
@@ -61,15 +64,33 @@ uint8_t targetNode = 2;
 #if defined(ESP8266) || defined(ESP32)
 ICACHE_RAM_ATTR
 #endif
-void setFlag(void) {
-  // we sent or received a packet, set the flag
-  operationDone = true;
-}
+// void setFlag(void) {
+//   // we sent or received a packet, set the flag
+//   operationDone = true;
+// }
 
-void pingNextNode(){
+// void pingNextNode(){
+//   targetNode++;
+//   if(targetNode > NUM_NODES)
+//   {
+//     targetNode = 2;
+//   }
+//   String packet = "";
+//   packet += targetNode;
+//   packet += ":Hello World!";
+
+//   Serial.print(F("[SX1262] Sending packet to node "));
+//   Serial.print(targetNode);
+//   Serial.println(F("..."));
+//   Serial.println(packet);
+
+//   transmissionState = radio.startTransmit(packet);
+//   transmitFlag = true;
+// }
+
+void pingNextNode() {
   targetNode++;
-  if(targetNode > NUM_NODES)
-  {
+  if (targetNode > NUM_NODES) {
     targetNode = 2;
   }
   String packet = "";
@@ -81,8 +102,24 @@ void pingNextNode(){
   Serial.println(F("..."));
   Serial.println(packet);
 
-  transmissionState = radio.startTransmit(packet);
-  transmitFlag = true;
+  // Use the SIMPLE BLOCKING transmit
+
+
+  if (int transmissionState = radio.transmit(packet); transmissionState == RADIOLIB_ERR_NONE) {
+    Serial.println(F("transmission finished!"));
+
+    // NOW, start listening and set our software timer
+    radio.startReceive();  // Listen forever (no timeout)
+    waitingForReply = true;
+    replyStartTime = millis();  // Start our watchdog
+
+  } else {
+    Serial.print(F("transmission failed, code "));
+    Serial.println(transmissionState);
+    // Wait and try the next node
+    delay(1000);
+    pingNextNode();
+  }
 }
 
 void setup() {
@@ -95,8 +132,8 @@ void setup() {
 
   // initialize SX1262 with default settings
   Serial.print(F("[SX1262] Initializing ... "));
-  int state = radio.begin();
-  if (state == RADIOLIB_ERR_NONE) {
+
+  if (int state = radio.begin(); state == RADIOLIB_ERR_NONE) {
     Serial.println(F("success!"));
   } else {
     Serial.print(F("failed, code "));
@@ -104,12 +141,14 @@ void setup() {
     while (true) { delay(10); }
   }
 
+  // pingNextNode();
+
   // set the function that will be called
   // when new packet is received
-  radio.setDio1Action(setFlag);
+  // radio.setDio1Action(setFlag);
 
-#if defined(INITIATING_NODE)
-  pingNextNode();
+  // #if defined(INITIATING_NODE)
+  // pingNextNode();
   // String packet = "";
   // packet += targetNode;       // Add the address (e.g., "2")
   // packet += ":Hello World!";  // Add a separator and the message
@@ -120,88 +159,166 @@ void setup() {
 
   // transmissionState = radio.startTransmit(packet);
   // transmitFlag = true;
-#else
-  // start listening for LoRa packets on this node
-  Serial.print(F("[SX1262] Starting to listen ... "));
-  state = radio.startReceive();
-  if (state == RADIOLIB_ERR_NONE) {
-    Serial.println(F("success!"));
-  } else {
-    Serial.print(F("failed, code "));
-    Serial.println(state);
-    while (true) { delay(10); }
-  }
-#endif
+  // #else
+  //   // start listening for LoRa packets on this node
+  //   Serial.print(F("[SX1262] Starting to listen ... "));
+  //   state = radio.startReceive();
+  //   if (state == RADIOLIB_ERR_NONE) {
+  //     Serial.println(F("success!"));
+  //   } else {
+  //     Serial.print(F("failed, code "));
+  //     Serial.println(state);
+  //     while (true) { delay(10); }
+  //   }
+  // #endif
 }
 
 void loop() {
   // check if the previous operation finished
-  if (operationDone) {
-    // reset flag
-    operationDone = false;
+  if(++targetNode > NUM_NODES) targetNode = 2;
+  
+  String packet = "";
+  packet += targetNode;
+  packet += ":Hello World!";
 
-    if (transmitFlag) {
-      // the previous operation was transmission, listen for response
-      transmitFlag = false;
-      // print the result
+  Serial.print(F("[SX1262] Sending to node "));
+  Serial.print(targetNode);
+  Serial.print(F("... "));
 
-      transmissionState = radio.finishTransmit();
+  int state = radio.transmit(packet);
 
-      if (transmissionState == RADIOLIB_ERR_NONE) {
-        // packet was successfully sent
-        Serial.println(F("transmission finished!"));
-        radio.standby();
-        // Start listening for a reply, WITH a timeout
-        Serial.print(F("[SX1262] Listening for reply (max "));
-        Serial.print(RX_TIMEOUT);
-        Serial.println(F(" ms)..."));
-        radio.startReceive(2000);
+  if (state == RADIOLIB_ERR_NONE) {
+    Serial.println(F("sent!"));
+    
+    // 3. RECEIVE (Blocking with Timeout)
+    // The radio waits here for 'RX_TIMEOUT' ms
+    // It automatically handles flags, standby, etc.
+    String str;
+    Serial.println(F("[SX1262] Waiting for reply..."));
+    
+    state = radio.receive(str, 0, RX_TIMEOUT);
 
-      } else {
-        Serial.print(F("transmission failed, code "));
-        Serial.println(transmissionState);
-        // Don't listen, just wait and move to the next node
-        delay(1000); 
-        pingNextNode();
-      }
+    if (state == RADIOLIB_ERR_NONE) {
+      // --- SUCCESS ---
+      Serial.println(F("[SX1262] Reply received!"));
+      Serial.print(F("[SX1262] Data: "));
+      Serial.println(str);
+      Serial.print(F("[SX1262] RSSI: "));
+      Serial.print(radio.getRSSI());
+      Serial.println(F(" dBm"));
+      
+    } else if (state == RADIOLIB_ERR_RX_TIMEOUT) {
+      // --- TIMEOUT ---
+      Serial.println(F("[SX1262] Timed out!"));
+      
+    } else if (state == RADIOLIB_ERR_CRC_MISMATCH) {
+      // --- CRC ERROR ---
+      // This means we heard something, but it was corrupted
+      Serial.println(F("[SX1262] Error: CRC Mismatch (Bad signal)"));
+      
     } else {
-      // the previous operation was reception
-      // print data and send another packet
-      String str;
-      int state = radio.readData(str);
-
-      radio.standby(); // Force the radio into a clean idle state
-
-      if (state == RADIOLIB_ERR_NONE) {
-        // packet was successfully received
-        Serial.println(F("[SX1262] Received packet!"));
-
-        // print data of the packet
-        Serial.print(F("[SX1262] Data:\t\t"));
-        Serial.println(str);
-
-        // print RSSI (Received Signal Strength Indicator)
-        Serial.print(F("[SX1262] RSSI:\t\t"));
-        Serial.print(radio.getRSSI());
-        Serial.println(F(" dBm"));
-
-        // print SNR (Signal-to-Noise Ratio)
-        Serial.print(F("[SX1262] SNR:\t\t"));
-        Serial.print(radio.getSNR());
-        Serial.println(F(" dB"));
-      } else if(state == RADIOLIB_ERR_RX_TIMEOUT) {
-        // --- TIMEOUT: No reply ---
-        Serial.print(F("[SX1262] Timed out waiting for reply from node "));
-        Serial.println(targetNode);
-      } else {
-        // --- Other error ---
-        Serial.print(F("[SX1262] Receive failed, code "));
-        Serial.println(state);
-      }
-
-      // wait a second before transmitting again
-      delay(1000);
-      pingNextNode();
+      // --- OTHER ERROR ---
+      Serial.print(F("[SX1262] Error code: "));
+      Serial.println(state);
     }
+
+  } else {
+    Serial.print(F("Transmit failed, code "));
+    Serial.println(state);
   }
+
+  // Wait 1 second before next ping
+  delay(1000);
+
+
+
+  // if (waitingForReply) {
+  //   if (radio.available() > 0) {
+  //     String str;
+  //     int state = radio.readData(str);
+  //     radio.standby();  // Good practice
+
+  //     waitingForReply = false;  // Stop the timer
+
+  //     if (state == RADIOLIB_ERR_NONE) {
+  //       // packet was successfully received
+  //       Serial.println(F("[SX1262] Received packet!"));
+
+  //       // print data of the packet
+  //       Serial.print(F("[SX1262] Data:\t\t"));
+  //       Serial.println(str);
+
+  //       // print RSSI (Received Signal Strength Indicator)
+  //       Serial.print(F("[SX1262] RSSI:\t\t"));
+  //       Serial.print(radio.getRSSI());
+  //       Serial.println(F(" dBm"));
+
+  //       // print SNR (Signal-to-Noise Ratio)
+  //       Serial.print(F("[SX1262] SNR:\t\t"));
+  //       Serial.print(radio.getSNR());
+  //       Serial.println(F(" dB"));
+  //     } else {
+  //       // --- Other error ---
+  //       Serial.print(F("[SX1262] Receive failed, code "));
+  //       Serial.println(state);
+  //     }
+
+  //     delay(1000);
+  //     pingNextNode();
+  //   }
+
+  //   if (millis() - replyStartTime > RX_TIMEOUT) {
+  //     waitingForReply = false;  // Stop the timer
+
+  //     radio.standby();  // Force the radio out of receive mode
+
+  //     Serial.print(F("[SX1262] Timed out waiting for reply from node "));
+  //     Serial.println(targetNode);
+
+  //     // Wait and move to the next node
+  //     delay(1000);
+  //     pingNextNode();
+  //   }
+  // }
+
+
+  // } else {
+  //   // the previous operation was reception
+  //   // print data and send another packet
+  //   String str;
+  //   int state = radio.readData(str);
+
+  //   radio.standby(); // Force the radio into a clean idle state
+
+  //   if (state == RADIOLIB_ERR_NONE) {
+  //     // packet was successfully received
+  //     Serial.println(F("[SX1262] Received packet!"));
+
+  //     // print data of the packet
+  //     Serial.print(F("[SX1262] Data:\t\t"));
+  //     Serial.println(str);
+
+  //     // print RSSI (Received Signal Strength Indicator)
+  //     Serial.print(F("[SX1262] RSSI:\t\t"));
+  //     Serial.print(radio.getRSSI());
+  //     Serial.println(F(" dBm"));
+
+  //     // print SNR (Signal-to-Noise Ratio)
+  //     Serial.print(F("[SX1262] SNR:\t\t"));
+  //     Serial.print(radio.getSNR());
+  //     Serial.println(F(" dB"));
+  //   } else if(state == RADIOLIB_ERR_RX_TIMEOUT) {
+  //     // --- TIMEOUT: No reply ---
+  //     Serial.print(F("[SX1262] Timed out waiting for reply from node "));
+  //     Serial.println(targetNode);
+  //   } else {
+  //     // --- Other error ---
+  //     Serial.print(F("[SX1262] Receive failed, code "));
+  //     Serial.println(state);
+  //   }
+
+  //   // wait a second before transmitting again
+  //   delay(1000);
+  //   pingNextNode();
+  // }
 }
