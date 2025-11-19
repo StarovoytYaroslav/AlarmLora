@@ -1,5 +1,8 @@
 #include <Arduino.h>
-#include <SPI.h>
+#include <SPI.h>       // <--- THIS IS THE KEY. This forces PlatformIO to link the library.
+#include <RadioLib.h>
+#include <WiFi.h>
+#include <ESPAsyncWebServer.h>
 
 void setup() {
   Serial.begin(115200);
