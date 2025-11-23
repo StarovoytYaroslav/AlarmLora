@@ -7,12 +7,23 @@
 #include <heltec-eink-modules.h>
 #include "Fonts/FreeSans9pt7b.h"
 #include "Fonts/FreeSansBold9pt7b.h"
+#include "html.h"
 
 EInkDisplay_WirelessPaperV1_1 display;
 SPIClass loraSPI(1);
 SX1262 radio = new Module(LORA_CS, LORA_DIO1, LORA_RST, LORA_BUSY, loraSPI);
 AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
+
+void setupDisplay()
+{
+  display.clearMemory(); // Start a new drawing
+  display.update();
+  display.landscape();
+  display.setFont(&FreeSans9pt7b);
+  display.setCursor(1, 24); // Text Cursor - x:5 y:20
+  display.fastmodeOn();
+}
 
 struct NodeData
 {
@@ -21,24 +32,50 @@ struct NodeData
   int rssi;
   bool updated;
 };
-NodeData latestData;
+NodeData lastKnownData;
 SemaphoreHandle_t dataMutex;
 
 #define NUM_NODES 3
 #define RX_TIMEOUT 2000
 
+// // --- WebSocket Event Handler ---
+// void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len)
+// {
+//   if (type == WS_EVT_CONNECT)
+//   {
+//     Serial.println("Web Client Connected");
+//   }
+//   else if (type == WS_EVT_DISCONNECT)
+//   {
+//     Serial.println("Web Client Disconnected");
+//   }
+// }
+
+void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len)
+{
+  if (type == WS_EVT_CONNECT)
+  {
+    // User just opened the page! Check if we have old data.
+    if (xSemaphoreTake(dataMutex, 100))
+    {
+      if (lastKnownData.id != 0)
+      { // If we have data
+        String msg = String(lastKnownData.id) + "," + lastKnownData.message + "," + String(lastKnownData.rssi);
+        client->text(msg); // Send ONLY to this new client
+      }
+      xSemaphoreGive(dataMutex);
+    }
+  }
+}
+
 void taskLoRa(void *pvParameters);
 
 void setup()
 {
-  display.clearMemory(); // Start a new drawing
-  display.update();
-  display.landscape();
-  display.setFont(&FreeSans9pt7b);
-  display.setCursor(1, 24); // Text Cursor - x:5 y:20
-  display.fastmodeOn();
+  setupDisplay();
 
   Serial.begin(115200);
+  pinMode(LED_PIN, OUTPUT);
 
   // 1. Wait for Serial (Optional, useful for debugging startup)
   while (!Serial)
@@ -65,101 +102,186 @@ void setup()
 
   // 4. Setup Web Server
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
+            { request->send(200, "text/html", index_html); });
+
+  server.on("/favicon.ico", HTTP_GET, [](AsyncWebServerRequest *request)
             {
-      String html = "<html><head><meta http-equiv='refresh' content='2'></head><body>";
-      html += "<h1>LoRa Map Master</h1>";
-      
-      if(xSemaphoreTake(dataMutex, 100)) {
-         html += "<h3>Last Signal:</h3>";
-         html += "<p><b>Node ID:</b> " + String(latestData.id) + "</p>";
-         html += "<p><b>Message:</b> " + latestData.message + "</p>";
-         html += "<p><b>RSSI:</b> " + String(latestData.rssi) + " dBm</p>";
-         xSemaphoreGive(dataMutex);
-      } else {
-        html += "<p>Loading data...</p>";
-      }
-      html += "</body></html>";
-      request->send(200, "text/html", html); });
+              request->send(204); // "No Content" - tells browser to stop waiting
+            });
+  // server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
+  //           {
+  //     String html = "<html><head><meta http-equiv='refresh' content='2'></head><body>";
+  //     html += "<h1>LoRa Map Master</h1>";
+
+  //     if(xSemaphoreTake(dataMutex, 100)) {
+  //        html += "<h3>Last Signal:</h3>";
+  //        html += "<p><b>Node ID:</b> " + String(latestData.id) + "</p>";
+  //        html += "<p><b>Message:</b> " + latestData.message + "</p>";
+  //        html += "<p><b>RSSI:</b> " + String(latestData.rssi) + " dBm</p>";
+  //        xSemaphoreGive(dataMutex);
+  //     } else {
+  //       html += "<p>Loading data...</p>";
+  //     }
+  //     html += "</body></html>";
+  //     request->send(200, "text/html", html); });
+
+  ws.onEvent(onEvent);
+
+  server.addHandler(&ws);
+
   server.begin();
 
   // 5. Launch LoRa Task on Core 1
   xTaskCreatePinnedToCore(taskLoRa, "LoRaTask", 8192, NULL, 1, NULL, 1);
+  ws.onEvent(onEvent);
 }
+
+// void taskLoRa(void *pvParameters)
+// {
+//   // 1. Init SPI
+//   loraSPI.begin(LORA_SCK, LORA_MISO, LORA_MOSI, -1);
+
+//   // 2. Init Radio (EU868)
+//   Serial.print("[LoRa] Initializing... ");
+//   int state = radio.begin(868.0, 125.0, 9, 8, 0x12, 22);
+
+//   if (state == RADIOLIB_ERR_NONE)
+//   {
+//     Serial.println("Success!");
+//   }
+//   else
+//   {
+//     Serial.printf("Failed, code %d\n", state);
+//     vTaskDelete(NULL); // Stop task if radio fails
+//   }
+
+//   uint8_t targetNode = 2;
+
+//   for (;;)
+//   {
+//     // Loop through nodes 2 and 3
+//     targetNode++;
+//     if (targetNode > NUM_NODES)
+//       targetNode = 2;
+
+//     String packet = String(targetNode) + ":Ping";
+//     Serial.printf("[LoRa] Pinging Node %d... ", targetNode);
+
+//     // Transmit
+//     int state = radio.transmit(packet);
+
+//     if (state == RADIOLIB_ERR_NONE)
+//     {
+//       // Receive Window
+//       String str;
+//       state = radio.receive(str, 0, RX_TIMEOUT);
+
+//       if (state == RADIOLIB_ERR_NONE)
+//       {
+//         Serial.printf("Reply: %s (RSSI: %f)\n", str.c_str(), radio.getRSSI());
+
+//         // Save to Shared Data
+//         if (xSemaphoreTake(dataMutex, portMAX_DELAY) == pdTRUE)
+//         {
+//           latestData.id = targetNode;
+//           latestData.message = str;
+//           latestData.rssi = radio.getRSSI();
+//           latestData.updated = true;
+//           xSemaphoreGive(dataMutex);
+//         }
+//       }
+//       else if (state == RADIOLIB_ERR_RX_TIMEOUT)
+//       {
+//         Serial.println("Timeout.");
+//       }
+//       else
+//       {
+//         Serial.printf("RX Error: %d\n", state);
+//       }
+//     }
+//     else
+//     {
+//       Serial.printf("TX Failed: %d\n", state);
+//     }
+
+//     // Wait 1 second before pinging the next node
+//     vTaskDelay(1000 / portTICK_PERIOD_MS);
+//   }
+// }
 
 void taskLoRa(void *pvParameters)
 {
-  // 1. Init SPI
+  // Init SPI
   loraSPI.begin(LORA_SCK, LORA_MISO, LORA_MOSI, -1);
 
-  // 2. Init Radio (EU868)
-  Serial.print("[LoRa] Initializing... ");
-  int state = radio.begin(868.0, 125.0, 9, 8, 0x12, 22);
-
-  if (state == RADIOLIB_ERR_NONE)
+  // Init Radio
+  int state = radio.begin(868.0, 125.0, 9, 7, 0x12, 22);
+  if (state != RADIOLIB_ERR_NONE)
   {
-    Serial.println("Success!");
-  }
-  else
-  {
-    Serial.printf("Failed, code %d\n", state);
-    vTaskDelete(NULL); // Stop task if radio fails
+    Serial.printf("LoRa Failed: %d\n", state);
+    vTaskDelete(NULL);
   }
 
   uint8_t targetNode = 2;
 
   for (;;)
   {
-    // Loop through nodes 2 and 3
+    // 1. Rotate Target
     targetNode++;
     if (targetNode > NUM_NODES)
       targetNode = 2;
 
     String packet = String(targetNode) + ":Ping";
-    Serial.printf("[LoRa] Pinging Node %d... ", targetNode);
+    Serial.printf("Pinging %d... ", targetNode);
 
-    // Transmit
+    // 2. Transmit
+    digitalWrite(LED_PIN, LOW); // LED On
     int state = radio.transmit(packet);
+    digitalWrite(LED_PIN, HIGH); // LED Off
 
     if (state == RADIOLIB_ERR_NONE)
     {
-      // Receive Window
+      // 3. Receive
       String str;
       state = radio.receive(str, 0, RX_TIMEOUT);
 
       if (state == RADIOLIB_ERR_NONE)
       {
-        Serial.printf("Reply: %s (RSSI: %f)\n", str.c_str(), radio.getRSSI());
+        Serial.printf("Reply: %s\n", str.c_str());
 
-        // Save to Shared Data
-        if (xSemaphoreTake(dataMutex, portMAX_DELAY) == pdTRUE)
+        // --- A. LIVE PUSH (WebSocket) ---
+        // Send immediately to connected browsers
+        String wsData = String(targetNode) + "," + str + "," + String(radio.getRSSI());
+        ws.textAll(wsData);
+        // --- B. SAVE STATE (Mutex) ---
+        // Save for any NEW clients that connect later
+        if (xSemaphoreTake(dataMutex, 100))
         {
-          latestData.id = targetNode;
-          latestData.message = str;
-          latestData.rssi = radio.getRSSI();
-          latestData.updated = true;
+          lastKnownData.id = targetNode;
+          lastKnownData.message = str;
+          lastKnownData.rssi = radio.getRSSI();
           xSemaphoreGive(dataMutex);
         }
       }
       else if (state == RADIOLIB_ERR_RX_TIMEOUT)
       {
-        Serial.println("Timeout.");
-      }
-      else
-      {
-        Serial.printf("RX Error: %d\n", state);
+        Serial.println("Timeout");
+        // Optional: Send "Timeout" status to Web via WebSocket?
+        // ws.textAll(String(targetNode) + ",Timeout,0");
       }
     }
     else
     {
-      Serial.printf("TX Failed: %d\n", state);
+      Serial.printf("TX Err: %d\n", state);
     }
 
-    // Wait 1 second before pinging the next node
+    // 4. Wait before next ping
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 }
 
 void loop()
 {
+  ws.cleanupClients();
   vTaskDelay(1000);
 }

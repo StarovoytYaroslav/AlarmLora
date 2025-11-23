@@ -23,6 +23,7 @@ void setFlag(void) {
 
 
 void setup() {
+  pinMode(LED_PIN, OUTPUT);
   Serial.begin(115200);
 
   // --- 4. Initialize your custom SPI bus ---
@@ -124,7 +125,9 @@ void loop() {
           // (Replies could also be addressed back to node 1)
           String reply = "1:Got it!";
           Serial.print(F("[SX1262] Sending reply ... "));
+          digitalWrite(LED_PIN, LOW); // LED On
           transmissionState = radio.startTransmit(reply);
+          digitalWrite(LED_PIN, HIGH); // LED On
           transmitFlag = true;
         } else {
           // Packet was not for this node, stay silent
