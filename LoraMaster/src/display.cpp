@@ -1,9 +1,27 @@
-#include "DisplayTest.h"
+#include "display.h"
 #include <Arduino.h>
 #include "Fonts/FreeSans9pt7b.h"
 #include "Fonts/FreeSansBold9pt7b.h"
 
-void displayTest(EInkDisplay_WirelessPaperV1_1& display)
+void Display::setupDisplay()
+{
+    display.clearMemory(); // Start a new drawing
+    display.update();
+    display.landscape();
+    display.setFont(&FreeSans9pt7b);
+    display.setCursor(1, 24); // Text Cursor - x:5 y:20
+    display.fastmodeOn();
+}
+
+void Display::printWiFiOnDisplay(const Printable &str)
+{
+    display.println("WiFi Connected!");
+    display.print("Web Server IP: ");
+    display.println(str);
+    display.update();
+}
+
+void Display::displayTest()
 {
     Serial.begin(115200);
     while (!Serial)

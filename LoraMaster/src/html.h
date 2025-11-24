@@ -1,69 +1,118 @@
 #pragma once
 
-#include <ESPAsyncWebServer.h>
-
-// --- HTML Page (Stored in Flash) ---
-// We use R"raw(...)raw" to write multi-line HTML/JS easily
 const char index_html[] PROGMEM = R"raw(
 <!DOCTYPE HTML><html>
 <head>
   <title>LoRa Map Master</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  
   <style>
-    body { font-family: Arial; text-align: center; margin-top: 50px; }
-    .card { background: #f4f4f4; max-width: 400px; margin: 0 auto; padding: 20px; border-radius: 10px; box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2); }
-    h1 { color: #003366; }
-    p { font-size: 1.2rem; }
-    .val { color: #d63031; font-weight: bold; }
+    html, body { height: 100%; margin: 0; padding: 0; }
+    #map { height: 100%; width: 100%; }
+    
+    /* Overlay Status Box */
+    .status-box {
+        position: absolute; top: 10px; right: 10px; z-index: 1000;
+        background: white; padding: 10px; border-radius: 5px;
+        box-shadow: 0 0 5px rgba(0,0,0,0.3); font-family: Arial; font-size: 14px;
+    }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h1>LoRa Master Node</h1>
-    <p>Node ID: <span id="id" class="val">Waiting...</span></p>
-    <p>Message: <span id="msg" class="val">-</span></p>
-    <p>RSSI: <span id="rssi" class="val">-</span> dBm</p>
-    <p>Status: <span id="status" style="font-size:0.8rem; color:grey">Disconnected</span></p>
+  
+  <div id="map"></div>
+  
+  <div class="status-box">
+    <b>Status:</b> <span id="ws-status" style="color:orange;">Connecting...</span>
   </div>
 
-<script>
-  var gateway = `ws://${window.location.hostname}/ws`;
-  var websocket;
+  <script>
+    // --- 1. Initialize Map (Centered on Kyiv) ---
+    // Coordinates: 50.4501 N, 30.5234 E
+    var map = L.map('map').setView([50.4501, 30.5234], 13);
 
-  function initWebSocket() {
-    console.log('Trying to open a WebSocket connection...');
-    websocket = new WebSocket(gateway);
-    websocket.onopen    = onOpen;
-    websocket.onclose   = onClose;
-    websocket.onmessage = onMessage;
-  }
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
 
-  function onOpen(event) {
-    document.getElementById('status').innerHTML = "Connected via WebSocket";
-    document.getElementById('status').style.color = "green";
-  }
+    // Dictionary to store markers by ID: { "2": markerObj, "3": markerObj }
+    var markers = {};
 
-  function onClose(event) {
-    document.getElementById('status').innerHTML = "Connection Lost. Retrying...";
-    document.getElementById('status').style.color = "red";
-    setTimeout(initWebSocket, 2000);
-  }
+    // --- 2. WebSocket Logic ---
+    var gateway = `ws://${window.location.hostname}/ws`;
+    var websocket;
 
-  function onMessage(event) {
-    // We expect data in format: "ID,MESSAGE,RSSI"
-    var data = event.data.split(","); 
-    document.getElementById('id').innerHTML = data[0];
-    document.getElementById('msg').innerHTML = data[1];
-    document.getElementById('rssi').innerHTML = data[2];
-    
-    // Blink visual effect
-    document.querySelector('.card').style.backgroundColor = "#e8f5e9";
-    setTimeout(() => { document.querySelector('.card').style.backgroundColor = "#f4f4f4"; }, 200);
-  }
+    function initWebSocket() {
+      websocket = new WebSocket(gateway);
+      websocket.onopen    = onOpen;
+      websocket.onclose   = onClose;
+      websocket.onmessage = onMessage;
+    }
 
-  window.addEventListener('load', onLoad);
-  function onLoad(event) { initWebSocket(); }
-</script>
+    function onOpen(event) {
+      document.getElementById('ws-status').innerHTML = "Connected";
+      document.getElementById('ws-status').style.color = "green";
+    }
+
+    function onClose(event) {
+      document.getElementById('ws-status').innerHTML = "Disconnected";
+      document.getElementById('ws-status').style.color = "red";
+      setTimeout(initWebSocket, 2000);
+    }
+
+    function onMessage(event) {
+      // Expected Data: "ID,MESSAGE,RSSI"
+      // Example: "2,Hello World,-45"
+      console.log("RX:", event.data);
+      var data = event.data.split(",");
+      
+      var id   = data[0];
+      var msg  = data[1];
+      var rssi = data[2];
+
+      // --- HARDCODED COORDINATES LOGIC ---
+      // Base: Kyiv Center
+      var lat = 50.4501; 
+      var lng = 30.5234;
+
+      // Fake Offset: Move markers slightly so they don't overlap
+      // Logic: Node 2 goes North, Node 3 goes East, etc.
+      if (id == '2') { lat += 0.01; } 
+      if (id == '3') { lng += 0.01; }
+      if (id == '4') { lat -= 0.01; }
+
+      // Content for the Popup
+      var popupContent = `
+        <div style="min-width: 100px">
+          <b style="font-size:1.2em">Node ${id}</b><hr>
+          <b>Msg:</b> ${msg}<br>
+          <b>RSSI:</b> ${rssi} dBm<br>
+          <small>Lat: ${lat.toFixed(4)}</small>
+        </div>
+      `;
+
+      // Check if marker exists
+      if (markers[id]) {
+        // UPDATE existing marker
+        markers[id].setPopupContent(popupContent);
+        // Optional: markers[id].setLatLng([lat, lng]); // If moving real-time
+        
+        // Flash effect on update
+        markers[id].openPopup(); 
+      } else {
+        // CREATE new marker
+        var newMarker = L.marker([lat, lng]).addTo(map);
+        newMarker.bindPopup(popupContent).openPopup();
+        markers[id] = newMarker; // Save to dictionary
+      }
+    }
+
+    window.addEventListener('load', initWebSocket);
+  </script>
 </body>
 </html>
 )raw";
