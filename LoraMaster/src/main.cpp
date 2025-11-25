@@ -121,9 +121,9 @@ void taskLoRa(void *pvParameters)
     Serial.printf("Pinging %d... ", targetNode);
 
     // 2. Transmit
-    digitalWrite(LED_PIN, LOW); // LED On
+    digitalWrite(LED_PIN, HIGH); // LED On
     int state = radio.transmit(packet);
-    digitalWrite(LED_PIN, HIGH); // LED Off
+    digitalWrite(LED_PIN, LOW); // LED Off
 
     if (state == RADIOLIB_ERR_NONE)
     {

@@ -1,22 +1,22 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <RadioLib.h>
+#include <TinyGPS++.h>
 
 #define NODE_ID 2
+#define GPS_BAUD 9600
 
 SPIClass loraSPI(1);
-
 SX1262 radio = new Module(LORA_CS, LORA_DIO1, LORA_RST, LORA_BUSY, loraSPI);
 
+TinyGPSPlus gps;
+HardwareSerial GPS_Serial(1);
+
 int transmissionState = RADIOLIB_ERR_NONE;
-
 bool transmitFlag = false;
-
 volatile bool operationDone = false;
 
-ICACHE_RAM_ATTR
-
-void setFlag(void) {
+ICACHE_RAM_ATTR void setFlag(void) {
   // we sent or received a packet, set the flag
   operationDone = true;
 }
@@ -24,9 +24,12 @@ void setFlag(void) {
 
 void setup() {
   pinMode(LED_PIN, OUTPUT);
+
   Serial.begin(115200);
 
-  // --- 4. Initialize your custom SPI bus ---
+  GPS_Serial.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
+  Serial.println(F("[GPS] Serial started"));
+
   // The -1 for CS is important! It tells SPIClass
   // "RadioLib will manage the CS pin, not you."
   loraSPI.begin(LORA_SCK, LORA_MISO, LORA_MOSI, -1);
@@ -60,6 +63,11 @@ void setup() {
 }
 
 void loop() {
+
+  while (GPS_Serial.available() > 0) {
+    gps.encode(GPS_Serial.read());
+  }
+
   // check if the previous operation finished
   if (operationDone) {
     // reset flag
@@ -118,13 +126,30 @@ void loop() {
           Serial.print(radio.getSNR());
           Serial.println(F(" dB"));
 
+          // --- PREPARE GPS DATA ---
+          String latStr = "0.0";
+          String lonStr = "0.0";
+          String fixStat = "0";
+
+          // Only send real coords if GPS has a fix
+          if (gps.location.isValid()) {
+             latStr = String(gps.location.lat(), 6);
+             lonStr = String(gps.location.lng(), 6);
+             fixStat = "1";
+          } else {
+             Serial.println(F("[GPS] No Fix yet, sending 0.0"));
+          }
+
+          // Format: "TargetID:Lat,Lon,Fix" -> "1:50.123,30.123,1"
+          String reply = "1:" + latStr + "," + lonStr + "," + fixStat;
+
           // wait a second before transmitting again
-          delay(100);
+          // delay(100);
 
           // Send a reply
           // (Replies could also be addressed back to node 1)
-          String reply = "1:Got it!";
-          Serial.print(F("[SX1262] Sending reply ... "));
+          Serial.print(F("[SX1262] Sending reply: "));
+          Serial.println(reply);
           digitalWrite(LED_PIN, HIGH); // LED On
           transmissionState = radio.startTransmit(reply);
           digitalWrite(LED_PIN, LOW); // LED On
