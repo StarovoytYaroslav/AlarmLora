@@ -27,7 +27,7 @@ NodeData lastKnownData;
 SemaphoreHandle_t dataMutex;
 
 #define NUM_NODES 3
-#define RX_TIMEOUT 2000
+#define RX_TIMEOUT 1000
 
 void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len)
 {
@@ -162,7 +162,7 @@ void taskLoRa(void *pvParameters)
     }
 
     // 4. Wait before next ping
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    vTaskDelay(100 / portTICK_PERIOD_MS);
   }
 }
 
