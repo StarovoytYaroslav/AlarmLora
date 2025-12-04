@@ -5,8 +5,10 @@
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
 #include <heltec-eink-modules.h>
+#include <ArduinoJson.h>
 #include "html.h"
 #include "display.h"
+
 
 SPIClass loraSPI(1);
 SX1262 radio = new Module(LORA_CS, LORA_DIO1, LORA_RST, LORA_BUSY, loraSPI);
@@ -14,7 +16,8 @@ AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
 Display display;
 
-
+extern const char index_html_start[] asm("_binary_src_index_html_start");
+extern const char index_html_end[]   asm("_binary_src_index_html_end");
 
 struct NodeData
 {
@@ -38,7 +41,7 @@ void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType 
     {
       if (lastKnownData.id != 0)
       { // If we have data
-        String msg = String(lastKnownData.id) + "," + lastKnownData.message + "," + String(lastKnownData.rssi);
+        String msg = String(lastKnownData.id) + "," + lastKnownData.message + "," + String(lastKnownData.rssi) + ","  ;
         client->text(msg); // Send ONLY to this new client
       }
       xSemaphoreGive(dataMutex);
@@ -77,7 +80,15 @@ void setup()
 
   // 4. Setup Web Server
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
-            { request->send(200, "text/html", index_html); });
+            { 
+              size_t index_html_len = index_html_end - index_html_start;
+
+
+              // request->send(200, "text/html", index_html); 
+              request->send_P(200, "text/html", (const uint8_t*)index_html_start, index_html_len);
+
+
+            });
 
   server.on("/favicon.ico", HTTP_GET, [](AsyncWebServerRequest *request)
             {
@@ -131,12 +142,17 @@ void taskLoRa(void *pvParameters)
       String str;
       state = radio.receive(str, 0, RX_TIMEOUT);
 
+
+
       if (state == RADIOLIB_ERR_NONE)
       {
         Serial.printf("Reply: %s\n", str.c_str());
 
         // --- A. LIVE PUSH (WebSocket) ---
         // Send immediately to connected browsers
+
+        //Adding JSON
+
         String wsData = String(targetNode) + "," + str + "," + String(radio.getRSSI());
         ws.textAll(wsData);
         // --- B. SAVE STATE (Mutex) ---
@@ -146,6 +162,7 @@ void taskLoRa(void *pvParameters)
           lastKnownData.id = targetNode;
           lastKnownData.message = str;
           lastKnownData.rssi = radio.getRSSI();
+
           xSemaphoreGive(dataMutex);
         }
       }

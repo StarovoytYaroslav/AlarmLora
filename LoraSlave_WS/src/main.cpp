@@ -40,8 +40,6 @@ String labelNoise = "Silence";
 String labelSteps = "Steps";
 float conf[2] = {0.0};
 
-
-
 #define NODE_ID 2
 #define GPS_BAUD 9600
 

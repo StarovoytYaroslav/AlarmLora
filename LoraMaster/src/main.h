@@ -2,5 +2,5 @@
 
 #include <Arduino.h>
 
-String ssid = "AMES210";
-String pass = "AmesAjax";
+String ssid = "AMES203";
+String pass = "banana2000";

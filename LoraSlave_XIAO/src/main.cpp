@@ -25,6 +25,11 @@ ICACHE_RAM_ATTR void setFlag(void) {
 
 void setup() {
   pinMode(LED_PIN, OUTPUT);
+  //NOTE: GPS init for L76K
+  pinMode(GPS_WKUP_PIN, OUTPUT);
+  pinMode(GPS_RST_PIN, OUTPUT);
+  digitalWrite(GPS_WKUP_PIN, HIGH);
+  digitalWrite(GPS_RST_PIN, HIGH);
 
   Serial.begin(115200);
 
@@ -33,7 +38,7 @@ void setup() {
 
   // initialize SX1262 with default settings
   Serial.print(F("[SX1262] Initializing ... "));
-  int state = radio.begin(868.0, 125.0, 9, 8, 0x12, 22);
+  int state = radio.begin(868.0, 125.0, 9, 7, 0x12, 22);
   if (state == RADIOLIB_ERR_NONE) {
     Serial.println(F("success!"));
   } else {
@@ -93,6 +98,7 @@ void loop() {
       int state = radio.readData(str);
 
       if (state == RADIOLIB_ERR_NONE) {
+        Serial.println(GPS_Serial.available());
         // packet was successfully received
         Serial.println(F("[SX1262] Received packet!"));
 
@@ -138,7 +144,7 @@ void loop() {
           }
 
           // Format: "TargetID:Lat,Lon,Fix" -> "1:50.123,30.123,1"
-          String reply = "1:" + latStr + "," + lonStr + "," + fixStat;
+          String reply = "GPS:" + latStr + "," + lonStr + "," + fixStat;
 
           // wait a second before transmitting again
           // delay(100);
