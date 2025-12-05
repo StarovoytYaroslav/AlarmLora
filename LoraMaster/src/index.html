@@ -1,27 +1,46 @@
-<!DOCTYPE HTML><html>
+<!DOCTYPE HTML>
+<html>
+
 <head>
   <title>LoRa Map Master</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  
+
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  
+
   <style>
-    html, body { height: 100%; margin: 0; padding: 0; }
-    #map { height: 100%; width: 100%; }
-    
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+
+    #map {
+      height: 100%;
+      width: 100%;
+    }
+
     /* Overlay Status Box */
     .status-box {
-        position: absolute; top: 10px; right: 10px; z-index: 1000;
-        background: white; padding: 10px; border-radius: 5px;
-        box-shadow: 0 0 5px rgba(0,0,0,0.3); font-family: Arial; font-size: 14px;
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 1000;
+      background: white;
+      padding: 10px;
+      border-radius: 5px;
+      box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
+      font-family: Arial;
+      font-size: 14px;
     }
   </style>
 </head>
+
 <body>
-  
+
   <div id="map"></div>
-  
+
   <div class="status-box">
     <b>Status:</b> <span id="ws-status" style="color:orange;">Connecting...</span>
   </div>
@@ -45,8 +64,8 @@
 
     function initWebSocket() {
       websocket = new WebSocket(gateway);
-      websocket.onopen    = onOpen;
-      websocket.onclose   = onClose;
+      websocket.onopen = onOpen;
+      websocket.onclose = onClose;
       websocket.onmessage = onMessage;
     }
 
@@ -64,51 +83,62 @@
     function onMessage(event) {
       // Expected Data: "ID,MESSAGE,RSSI"
       // Example: "2,Hello World,-45"
-      console.log("RX:", event.data);
-      var data = event.data.split(",");
-      
-      var id   = data[0];
-      var msg  = data[1];
-      var rssi = data[2];
-      
+      // 1. PARSE JSON
+      // The browser does all the work for you!
+      var obj = JSON.parse(event.data);
+
+      // 2. Access variables by name
+      var id = obj.id;
+      var lat = obj.gps.lat;
+      var lng = obj.gps.lon;
+      var fix = obj.gps.fix;
+      var nCoef = obj.ai.nCoef;
+      var sCoef = obj.ai.sCoef;
+      var rssi = obj.radio.rssi;
+
       // --- HARDCODED COORDINATES LOGIC ---
       // Base: Kyiv Center
-      var lat = 50.4501; 
-      var lng = 30.5234;
+      var latHk = 50.4501;
+      var lngHk = 30.5234;
 
       // Fake Offset: Move markers slightly so they don't overlap
       // Logic: Node 2 goes North, Node 3 goes East, etc.
-      if (id == '2') { lat += 0.01; } 
-      if (id == '3') { lng += 0.01; }
-      if (id == '4') { lat -= 0.01; }
+      if (id == '2') { latHk += 0.01; }
+      if (id == '3') { lngHk += 0.01; }
+      if (id == '4') { latHk -= 0.01; }
 
       // Content for the Popup
       var popupContent = `
         <div style="min-width: 100px">
           <b style="font-size:1.2em">Node ${id}</b><hr>
-          <b>Msg:</b> ${msg}<br>
+          <b>Noise:</b> ${nCoef}<br>
+          <b>Steps:</b> ${sCoef}<br>
           <b>RSSI:</b> ${rssi} dBm<br>
-          <small>Lat: ${lat.toFixed(4)}</small>
         </div>
       `;
 
       // Check if marker exists
+      var opacity = 1.0;
+      if (fix != 1) {
+        lat = latHk;
+        lng = lngHk;
+        opacity = 0.5;
+      }
       if (markers[id]) {
-        // UPDATE existing marker
         markers[id].setPopupContent(popupContent);
-        // Optional: markers[id].setLatLng([lat, lng]); // If moving real-time
-        
-        // Flash effect on update
-        markers[id].openPopup(); 
+        markers[id].setLatLng([lat, lng]);
+        markers[id].openPopup();
       } else {
         // CREATE new marker
         var newMarker = L.marker([lat, lng]).addTo(map);
         newMarker.bindPopup(popupContent).openPopup();
         markers[id] = newMarker; // Save to dictionary
       }
+      markers[id].setOpacity(opacity);
     }
 
     window.addEventListener('load', initWebSocket);
   </script>
 </body>
+
 </html>

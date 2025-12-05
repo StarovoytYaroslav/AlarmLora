@@ -144,7 +144,7 @@ void loop() {
           }
 
           // Format: "TargetID:Lat,Lon,Fix" -> "1:50.123,30.123,1"
-          String reply = "GPS:" + latStr + "," + lonStr + "," + fixStat;
+          String reply = String(NODE_ID) + ":" + latStr + "," + lonStr + "," + fixStat + "," + 0.9999 + "," + 0.0001;
 
           // wait a second before transmitting again
           // delay(100);

@@ -9,7 +9,6 @@
 #include "html.h"
 #include "display.h"
 
-
 SPIClass loraSPI(1);
 SX1262 radio = new Module(LORA_CS, LORA_DIO1, LORA_RST, LORA_BUSY, loraSPI);
 AsyncWebServer server(80);
@@ -17,7 +16,7 @@ AsyncWebSocket ws("/ws");
 Display display;
 
 extern const char index_html_start[] asm("_binary_src_index_html_start");
-extern const char index_html_end[]   asm("_binary_src_index_html_end");
+extern const char index_html_end[] asm("_binary_src_index_html_end");
 
 struct NodeData
 {
@@ -25,6 +24,7 @@ struct NodeData
   String message;
   int rssi;
   bool updated;
+  String json;
 };
 NodeData lastKnownData;
 SemaphoreHandle_t dataMutex;
@@ -41,8 +41,8 @@ void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType 
     {
       if (lastKnownData.id != 0)
       { // If we have data
-        String msg = String(lastKnownData.id) + "," + lastKnownData.message + "," + String(lastKnownData.rssi) + ","  ;
-        client->text(msg); // Send ONLY to this new client
+        // String msg = String(lastKnownData.id) + "," + lastKnownData.message + "," + String(lastKnownData.rssi) + ",";
+        client->text(lastKnownData.json); // Send ONLY to this new client
       }
       xSemaphoreGive(dataMutex);
     }
@@ -80,15 +80,11 @@ void setup()
 
   // 4. Setup Web Server
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
-            { 
+            {
               size_t index_html_len = index_html_end - index_html_start;
 
-
-              // request->send(200, "text/html", index_html); 
-              request->send_P(200, "text/html", (const uint8_t*)index_html_start, index_html_len);
-
-
-            });
+              // request->send(200, "text/html", index_html);
+              request->send_P(200, "text/html", (const uint8_t *)index_html_start, index_html_len); });
 
   server.on("/favicon.ico", HTTP_GET, [](AsyncWebServerRequest *request)
             {
@@ -103,7 +99,7 @@ void setup()
 
   // 5. Launch LoRa Task on Core 1
   xTaskCreatePinnedToCore(taskLoRa, "LoRaTask", 8192, NULL, 1, NULL, 1);
-  ws.onEvent(onEvent);
+  // ws.onEvent(onEvent);
 }
 
 void taskLoRa(void *pvParameters)
@@ -142,8 +138,6 @@ void taskLoRa(void *pvParameters)
       String str;
       state = radio.receive(str, 0, RX_TIMEOUT);
 
-
-
       if (state == RADIOLIB_ERR_NONE)
       {
         Serial.printf("Reply: %s\n", str.c_str());
@@ -151,19 +145,61 @@ void taskLoRa(void *pvParameters)
         // --- A. LIVE PUSH (WebSocket) ---
         // Send immediately to connected browsers
 
-        //Adding JSON
-
-        String wsData = String(targetNode) + "," + str + "," + String(radio.getRSSI());
-        ws.textAll(wsData);
-        // --- B. SAVE STATE (Mutex) ---
-        // Save for any NEW clients that connect later
-        if (xSemaphoreTake(dataMutex, 100))
+        // Adding JSON
+        try
         {
-          lastKnownData.id = targetNode;
-          lastKnownData.message = str;
-          lastKnownData.rssi = radio.getRSSI();
+          // Remove the Target ID "1:"
+          int firstColon = str.indexOf(':');
+          String payload = str.substring(firstColon + 1); // "50.123,30.123,1,Bird(0.9)"
 
-          xSemaphoreGive(dataMutex);
+          // Split by commas
+          int comma1 = payload.indexOf(',');
+          int comma2 = payload.indexOf(',', comma1 + 1);
+          int comma3 = payload.indexOf(',', comma2 + 1);
+          int comma4 = payload.indexOf(',', comma3 + 1);
+
+          String latStr = payload.substring(0, comma1);
+          String lonStr = payload.substring(comma1 + 1, comma2);
+          String fixStr = payload.substring(comma2 + 1, comma3);
+          String noise = payload.substring(comma3 + 1, comma4);
+          String steps = payload.substring(comma4 + 1);
+
+          JsonDocument doc;
+
+          doc["id"] = targetNode;
+          doc["gps"]["lat"] = latStr.toFloat(); // Converts "50.123" to float 50.123
+          doc["gps"]["lon"] = lonStr.toFloat();
+          doc["gps"]["fix"] = fixStr.toInt();
+          doc["radio"]["rssi"] = radio.getRSSI(); // Raw integer
+
+          // Nested AI object? Easy!
+          doc["ai"]["noise"] = "Noise"; // You can structure it however you want
+          doc["ai"]["nCoef"] = 0.895;
+          // noise.toFloat();
+          doc["ai"]["steps"] = "Steps"; // You can structure it however you want
+          doc["ai"]["sCoef"] = 0.105;
+          // steps.toFloat();
+
+          String jsonString = "";
+          serializeJson(doc, jsonString);
+
+          // String wsData = String(targetNode) + "," + str + "," + String(radio.getRSSI());
+          Serial.println(jsonString);
+          ws.textAll(jsonString);
+          // --- B. SAVE STATE (Mutex) ---
+          // Save for any NEW clients that connect later
+          if (xSemaphoreTake(dataMutex, 100))
+          {
+            lastKnownData.id = targetNode;
+            lastKnownData.message = str;
+            lastKnownData.rssi = radio.getRSSI();
+
+            xSemaphoreGive(dataMutex);
+          }
+        }
+        catch (const std::exception &e)
+        {
+          Serial.println(e.what());
         }
       }
       else if (state == RADIOLIB_ERR_RX_TIMEOUT)
