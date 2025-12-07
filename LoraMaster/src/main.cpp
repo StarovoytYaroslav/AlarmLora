@@ -174,11 +174,9 @@ void taskLoRa(void *pvParameters)
 
           // Nested AI object? Easy!
           doc["ai"]["noise"] = "Noise"; // You can structure it however you want
-          doc["ai"]["nCoef"] = 0.895;
-          // noise.toFloat();
+          doc["ai"]["nCoef"] = noise.toFloat();
           doc["ai"]["steps"] = "Steps"; // You can structure it however you want
-          doc["ai"]["sCoef"] = 0.105;
-          // steps.toFloat();
+          doc["ai"]["sCoef"] = steps.toFloat();
 
           String jsonString = "";
           serializeJson(doc, jsonString);
@@ -215,7 +213,7 @@ void taskLoRa(void *pvParameters)
     }
 
     // 4. Wait before next ping
-    vTaskDelay(100 / portTICK_PERIOD_MS);
+    vTaskDelay(300 / portTICK_PERIOD_MS);
   }
 }
 
