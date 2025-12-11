@@ -2,5 +2,5 @@
 
 #include <Arduino.h>
 
-String ssid = "Dart_Yara";
+String ssid = "SY_iPhone";
 String pass = "2358132134Me";

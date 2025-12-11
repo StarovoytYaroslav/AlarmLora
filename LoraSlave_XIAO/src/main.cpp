@@ -264,16 +264,16 @@ void taskAI(void *pvParameters)
       float best_val = result.classification[0].value;
 
       // print the predictions
-      ei_printf("Predictions ");
-      ei_printf("(DSP: %d ms., Classification: %d ms., Anomaly: %d ms.)",
-                result.timing.dsp, result.timing.classification, result.timing.anomaly);
-      ei_printf(": \n");
+      // ei_printf("Predictions ");
+      // ei_printf("(DSP: %d ms., Classification: %d ms., Anomaly: %d ms.)",
+      //           result.timing.dsp, result.timing.classification, result.timing.anomaly);
+      // ei_printf(": \n");
       for (size_t ix = 0; ix < EI_CLASSIFIER_LABEL_COUNT; ix++)
       {
-        ei_printf("    %s: ", result.classification[ix].label);
-        ei_printf_float(result.classification[ix].value);
+        // ei_printf("    %s: ", result.classification[ix].label);
+        // ei_printf_float(result.classification[ix].value);
         conf[ix] = result.classification[ix].value;
-        ei_printf("\n");
+        // ei_printf("\n");
         if (result.classification[ix].value > best_val)
         {
           best_val = result.classification[ix].value;
@@ -319,6 +319,7 @@ void taskRadio(void *pvParameters) {
 
     if (state == RADIOLIB_ERR_NONE)
     {
+      vTaskDelay(200);
       int separator = str.indexOf(':');
       int targetID = str.substring(0, separator).toInt();
 
@@ -346,8 +347,8 @@ void taskRadio(void *pvParameters) {
 
           // Only send real coords if GPS has a fix
           if (gps.location.isValid()) {
-             latStr = String(gps.location.lat(), 6);
-             lonStr = String(gps.location.lng(), 6);
+             latStr = String(gps.location.lat(), 2);
+             lonStr = String(gps.location.lng(), 2);
              fixStat = "1";
           } else {
              Serial.println(F("[GPS] No Fix yet, sending 0.0"));
@@ -357,10 +358,17 @@ void taskRadio(void *pvParameters) {
           String reply = String(NODE_ID) + ":" + latStr + "," + lonStr + "," + fixStat + "," + String(conf[0], 2) + "," + String(conf[1], 2);
 
           // wait a second before transmitting again
-          // delay(100);
 
           // Send a reply
           // (Replies could also be addressed back to node 1)
+          digitalWrite(LED_PIN, HIGH); // LED On
+          radio.startTransmit(reply);
+          digitalWrite(LED_PIN, LOW); // LED Off
+          vTaskDelay(250);
+          digitalWrite(LED_PIN, HIGH); // LED On
+          radio.startTransmit(reply);
+          digitalWrite(LED_PIN, LOW); // LED Off
+          vTaskDelay(250);
           digitalWrite(LED_PIN, HIGH); // LED On
           radio.startTransmit(reply);
           digitalWrite(LED_PIN, LOW); // LED Off

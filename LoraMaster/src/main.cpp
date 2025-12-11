@@ -29,7 +29,7 @@ struct NodeData
 NodeData lastKnownData;
 SemaphoreHandle_t dataMutex;
 
-#define NUM_NODES 3
+#define NUM_NODES 2
 #define RX_TIMEOUT 1000
 
 void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len)
@@ -99,7 +99,6 @@ void setup()
 
   // 5. Launch LoRa Task on Core 1
   xTaskCreatePinnedToCore(taskLoRa, "LoRaTask", 8192, NULL, 1, NULL, 1);
-  // ws.onEvent(onEvent);
 }
 
 void taskLoRa(void *pvParameters)
@@ -131,12 +130,19 @@ void taskLoRa(void *pvParameters)
     digitalWrite(LED_PIN, HIGH); // LED On
     int state = radio.transmit(packet);
     digitalWrite(LED_PIN, LOW); // LED Off
-
     if (state == RADIOLIB_ERR_NONE)
     {
       // 3. Receive
       String str;
-      state = radio.receive(str, 0, RX_TIMEOUT);
+      int replyStartTime = millis();
+      while(millis() - replyStartTime < RX_TIMEOUT)
+      {
+        state = radio.receive(str/*, 0, RX_TIMEOUT*/);  
+        if(state==0) break;
+        vTaskDelay(10);
+
+      }
+      // state = radio.receive(str, 0, RX_TIMEOUT);
 
       if (state == RADIOLIB_ERR_NONE)
       {
@@ -194,13 +200,11 @@ void taskLoRa(void *pvParameters)
 
             xSemaphoreGive(dataMutex);
           }
-        }
-        catch (const std::exception &e)
-        {
+        } catch (const std::exception &e) {
           Serial.println(e.what());
         }
       }
-      else if (state == RADIOLIB_ERR_RX_TIMEOUT)
+      else /*if (state == RADIOLIB_ERR_RX_TIMEOUT)*/
       {
         Serial.println("Timeout");
         // Optional: Send "Timeout" status to Web via WebSocket?
@@ -213,7 +217,8 @@ void taskLoRa(void *pvParameters)
     }
 
     // 4. Wait before next ping
-    vTaskDelay(300 / portTICK_PERIOD_MS);
+    // vTaskDelay(300 / portTICK_PERIOD_MS);
+    vTaskDelay(1000);
   }
 }
 
